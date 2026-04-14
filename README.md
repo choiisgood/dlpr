@@ -7,27 +7,6 @@
 ![yt-dlp](https://img.shields.io/badge/yt--dlp-latest-FF0000?style=flat-square&logo=youtube&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
----
-
-## 스크린샷
-
-```
-┌─────────────────────────────────────┐
-│  DLPR_          Video Downloader    │
-│                 Powered by yt-dlp   │
-├─────────────────────────────────────┤
-│  // New Download                    │
-│  ┌─────────────────────────────┐    │
-│  │ URL                         │    │
-│  └─────────────────────────────┘    │
-│  저장경로  [komq] [milkoy] [직접입력] │
-│  화질      [BEST][1080p][720p][480p] │
-│  모드      [ ] Audio Only (MP3)     │
-│  ┌─────────────────────────────┐    │
-│  │         DOWNLOAD            │    │
-│  └─────────────────────────────┘    │
-└─────────────────────────────────────┘
-```
 
 ---
 
