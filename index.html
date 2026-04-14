@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DLPR — Video Downloader</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@300;400;600&display=swap" rel="stylesheet"/>
+<style>
+  /* ─── Reset & Variables ─── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0a0a0a;
+    --bg2:       #111111;
+    --bg3:       #1a1a1a;
+    --border:    #2a2a2a;
+    --border2:   #383838;
+    --text:      #e8e8e8;
+    --muted:     #666;
+    --muted2:    #444;
+    --accent:    #e8ff47;        /* 형광 라임 — 어두운 배경의 강렬한 포인트 */
+    --accent2:   #b8cc00;
+    --red:       #ff4545;
+    --green:     #45ff8f;
+    --blue:      #4591ff;
+    --mono:      'Space Mono', monospace;
+    --sans:      'Sora', sans-serif;
+    --radius:    4px;
+    --glow:      0 0 20px rgba(232,255,71,0.15);
+  }
+
+  html { font-size: 16px; scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-weight: 300;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ─── Noise overlay ─── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.5;
+  }
+
+  /* ─── Layout ─── */
+  .wrap {
+    position: relative;
+    z-index: 1;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 0 24px 80px;
+  }
+
+  /* ─── Header ─── */
+  header {
+    padding: 52px 0 40px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 48px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -1px;
+    color: var(--accent);
+    line-height: 1;
+  }
+
+  .logo span {
+    color: var(--muted);
+    font-weight: 400;
+  }
+
+  .tagline {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--mono);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    text-align: right;
+    line-height: 1.6;
+  }
+
+  /* ─── Auth Gate ─── */
+  #auth-gate {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-width: 420px;
+    margin: 80px auto;
+    text-align: center;
+    animation: fadeUp .4s ease both;
+  }
+
+  #auth-gate h2 {
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  #auth-gate p {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  /* ─── Main App (hidden until auth) ─── */
+  #app { display: none; animation: fadeUp .4s ease both; }
+  #app.visible { display: block; }
+
+  /* ─── Form Card ─── */
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0;
+    transition: opacity .3s;
+  }
+
+  .card:focus-within::before { opacity: 1; }
+
+  .card-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .card-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ─── Inputs ─── */
+  .field { margin-bottom: 16px; }
+
+  label.field-label {
+    display: block;
+    font-size: 11px;
+    font-family: var(--mono);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  input[type="text"],
+  input[type="password"],
+  input[type="url"] {
+    width: 100%;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    padding: 14px 16px;
+    border-radius: var(--radius);
+    outline: none;
+    transition: border-color .2s, box-shadow .2s;
+    -webkit-appearance: none;
+  }
+
+  input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(232,255,71,.08);
+  }
+
+  input::placeholder { color: var(--muted2); }
+
+  /* ─── Options Row ─── */
+  .options-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .seg-group { display: flex; flex-direction: column; gap: 8px; }
+
+  .seg-btns { display: flex; gap: 4px; flex-wrap: wrap; }
+
+  .seg-btn {
+    flex: 1;
+    min-width: 52px;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 8px 6px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all .15s;
+    text-align: center;
+    letter-spacing: .5px;
+  }
+
+  .seg-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .seg-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #0a0a0a;
+    font-weight: 700;
+  }
+
+  /* ─── Toggle ─── */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: border-color .2s;
+    user-select: none;
+  }
+
+  .toggle-row:hover { border-color: var(--border2); }
+
+  .toggle-row.active { border-color: var(--accent); }
+
+  .toggle {
+    width: 36px; height: 20px;
+    background: var(--border2);
+    border-radius: 10px;
+    position: relative;
+    transition: background .2s;
+    flex-shrink: 0;
+  }
+
+  .toggle::after {
+    content: '';
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 14px; height: 14px;
+    background: var(--muted);
+    border-radius: 50%;
+    transition: transform .2s, background .2s;
+  }
+
+  .toggle-row.active .toggle { background: var(--accent); }
+  .toggle-row.active .toggle::after { transform: translateX(16px); background: #0a0a0a; }
+
+  .toggle-text { font-size: 12px; color: var(--muted); font-family: var(--mono); letter-spacing: 1px; text-transform: uppercase; }
+
+  /* ─── Buttons ─── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 16px 32px;
+    border-radius: var(--radius);
+    border: none;
+    cursor: pointer;
+    transition: all .15s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #0a0a0a;
+    width: 100%;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: #f5ff6e;
+    box-shadow: var(--glow);
+    transform: translateY(-1px);
+  }
+
+  .btn-primary:active:not(:disabled) { transform: translateY(0); }
+
+  .btn-primary:disabled { opacity: .35; cursor: not-allowed; }
+
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border2);
+    color: var(--muted);
+    font-size: 11px;
+    padding: 8px 14px;
+  }
+
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ─── Job List ─── */
+  .jobs-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .jobs-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .jobs-list { display: flex; flex-direction: column; gap: 10px; }
+
+  /* ─── Job Card ─── */
+  .job {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+    animation: slideIn .3s ease both;
+  }
+
+  .job::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+  }
+
+  .job.queued::before     { background: var(--muted2); }
+  .job.downloading::before { background: var(--blue); animation: pulse 1.5s ease-in-out infinite; }
+  .job.done::before       { background: var(--green); }
+  .job.error::before      { background: var(--red); }
+
+  .job-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .job-url {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    word-break: break-all;
+    line-height: 1.5;
+    flex: 1;
+  }
+
+  .job-status-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  .badge-queued     { background: rgba(100,100,100,.2); color: var(--muted); }
+  .badge-downloading { background: rgba(69,145,255,.15); color: var(--blue); }
+  .badge-done       { background: rgba(69,255,143,.12); color: var(--green); }
+  .badge-error      { background: rgba(255,69,69,.12); color: var(--red); }
+
+  /* Progress bar */
+  .progress-track {
+    height: 2px;
+    background: var(--border);
+    border-radius: 1px;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background: var(--blue);
+    border-radius: 1px;
+    transition: width .4s ease;
+  }
+
+  .job.done .progress-bar  { background: var(--green); }
+  .job.error .progress-bar { background: var(--red); }
+
+  .job-log {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  .job-meta {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+  }
+
+  .job-meta span {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted2);
+    letter-spacing: .5px;
+  }
+
+  /* ─── Empty state ─── */
+  .empty {
+    text-align: center;
+    padding: 48px 0;
+    color: var(--muted2);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 1px;
+  }
+
+  .empty .empty-icon {
+    font-size: 32px;
+    margin-bottom: 16px;
+    opacity: .3;
+  }
+
+  /* ─── Notification toast ─── */
+  #toast {
+    position: fixed;
+    bottom: 32px;
+    right: 32px;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 14px 20px;
+    border-radius: var(--radius);
+    z-index: 100;
+    transform: translateY(20px);
+    opacity: 0;
+    transition: all .25s ease;
+    max-width: 320px;
+    pointer-events: none;
+  }
+
+  #toast.show {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  #toast.success { border-left: 3px solid var(--green); }
+  #toast.error   { border-left: 3px solid var(--red); }
+  #toast.info    { border-left: 3px solid var(--accent); }
+
+  /* ─── Animations ─── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-8px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: .4; }
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(10,10,10,.3);
+    border-top-color: #0a0a0a;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+
+  /* ─── Responsive ─── */
+  @media (max-width: 540px) {
+    header { flex-direction: column; align-items: flex-start; }
+    .tagline { text-align: left; }
+    .options-row { grid-template-columns: 1fr; }
+    #toast { right: 16px; left: 16px; }
+    .card { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">DLPR<span>_</span></div>
+    <div class="tagline">Video Downloader<br/>Powered by yt-dlp</div>
+  </header>
+
+  <!-- Auth Gate -->
+  <div id="auth-gate">
+    <h2>// 인증 필요</h2>
+    <p>서버에 접근하려면<br/>시크릿 키를 입력하세요.</p>
+    <div class="field">
+      <label class="field-label">Secret Key</label>
+      <input type="password" id="key-input" placeholder="enter secret key..." autocomplete="current-password"/>
+    </div>
+    <button class="btn btn-primary" onclick="authenticate()">
+      AUTHENTICATE
+    </button>
+    <p id="auth-error" style="color:var(--red);font-size:12px;font-family:var(--mono);display:none">
+      ❌ 잘못된 키입니다.
+    </p>
+  </div>
+
+  <!-- Main App -->
+  <div id="app">
+
+    <!-- Download Form -->
+    <div class="card">
+      <div class="card-label">// New Download</div>
+
+      <div class="field">
+        <label class="field-label" for="url-input">URL</label>
+        <input type="url" id="url-input"
+          placeholder=""
+          autocomplete="off" autocorrect="off" spellcheck="false"/>
+      </div>
+
+      <div class="options-row" style="grid-template-columns: 1fr 1fr 1fr;">
+        <!-- Destination -->
+        <div class="seg-group">
+          <label class="field-label">저장 경로</label>
+          <div class="seg-btns" id="dest-btns" style="margin-bottom:6px">
+            <button class="seg-btn active" data-val="komq" onclick="selectDest(this)">komq</button>
+            <button class="seg-btn" data-val="milkoy" onclick="selectDest(this)">milkoy</button>
+            <button class="seg-btn" data-val="custom" onclick="selectDest(this)">직접입력</button>
+          </div>
+          <input type="text" id="custom-dest" placeholder="/media/..." autocomplete="off" spellcheck="false"
+            style="display:none;font-size:12px;padding:8px 10px"
+            oninput="if(dest==='custom')dest=this.value.trim()"/>
+        </div>
+
+        <!-- Quality -->
+        <div class="seg-group">
+          <label class="field-label">화질</label>
+          <div class="seg-btns" id="quality-btns">
+            <button class="seg-btn" data-val="best" onclick="selectQuality(this)">BEST</button>
+            <button class="seg-btn" data-val="1080" onclick="selectQuality(this)">1080p</button>
+            <button class="seg-btn active" data-val="720" onclick="selectQuality(this)">720p</button>
+            <button class="seg-btn" data-val="480" onclick="selectQuality(this)">480p</button>
+          </div>
+        </div>
+
+        <!-- Audio Only -->
+        <div class="seg-group">
+          <label class="field-label">모드</label>
+          <div class="toggle-row" id="audio-toggle" onclick="toggleAudio()">
+            <div class="toggle"></div>
+            <span class="toggle-text">Audio Only (MP3)</span>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="dl-btn" onclick="startDownload()">
+        <span id="btn-label">DOWNLOAD</span>
+      </button>
+    </div>
+
+    <!-- Job List -->
+    <div id="jobs-section" style="display:none">
+      <div class="jobs-header">
+        <div class="jobs-title">// Queue</div>
+        <button class="btn btn-ghost" onclick="clearDone()">CLEAR DONE</button>
+      </div>
+      <div class="jobs-list" id="jobs-list"></div>
+    </div>
+
+    <div id="empty-state" class="empty">
+      <div class="empty-icon">▽</div>
+      URL을 입력하고 다운로드를 시작하세요.
+    </div>
+
+  </div><!-- /#app -->
+</div><!-- /.wrap -->
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ─── Config ─────────────────────────────────────────────────────────────────
+// 백엔드 서버 주소 (같은 서버라면 '' 또는 'http://서버IP:8080')
+const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === ''
+  ? 'http://localhost:8080'
+  : `${window.location.protocol}//${window.location.hostname}:8080`;
+
+// ─── State ───────────────────────────────────────────────────────────────────
+let secretKey  = '';
+let quality    = '720';
+let audioOnly  = false;
+let dest       = 'komq';
+let jobs       = {};
+let pollTimer  = null;
+
+// ─── Auth ────────────────────────────────────────────────────────────────────
+function authenticate() {
+  const k = document.getElementById('key-input').value.trim();
+  if (!k) return;
+  secretKey = k;
+  // 서버에 테스트 요청 (잡 목록 조회)
+  fetch(`${API_BASE}/api/jobs?key=${encodeURIComponent(k)}`)
+    .then(r => {
+      if (r.ok) return r.json();
+      throw new Error('auth');
+    })
+    .then(data => {
+      document.getElementById('auth-gate').style.display = 'none';
+      document.getElementById('app').classList.add('visible');
+      document.getElementById('auth-error').style.display = 'none';
+      // 기존 잡 복원
+      data.forEach(j => { jobs[j.id] = j; });
+      renderJobs();
+      startPolling();
+    })
+    .catch(() => {
+      document.getElementById('auth-error').style.display = 'block';
+    });
+}
+
+document.getElementById('key-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') authenticate();
+});
+
+// ─── Quality / Audio Toggle ───────────────────────────────────────────────────
+function selectDest(el) {
+  document.querySelectorAll('#dest-btns .seg-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  const val = el.dataset.val;
+  const customInput = document.getElementById('custom-dest');
+  if (val === 'custom') {
+    customInput.style.display = 'block';
+    customInput.focus();
+    dest = customInput.value.trim() || '';
+  } else {
+    customInput.style.display = 'none';
+    dest = val;
+  }
+}
+
+function selectQuality(el) {
+  document.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  quality = el.dataset.val;
+}
+
+function toggleAudio() {
+  audioOnly = !audioOnly;
+  const t = document.getElementById('audio-toggle');
+  t.classList.toggle('active', audioOnly);
+  // 오디오 모드일 때 화질 선택 비활성화
+  document.querySelectorAll('.seg-btn').forEach(b => {
+    b.style.opacity = audioOnly ? '.35' : '1';
+    b.style.pointerEvents = audioOnly ? 'none' : '';
+  });
+}
+
+// ─── Download ─────────────────────────────────────────────────────────────────
+async function startDownload() {
+  const url = document.getElementById('url-input').value.trim();
+  if (!url.startsWith('http')) {
+    showToast('올바른 URL을 입력하세요.', 'error');
+    return;
+  }
+
+  const btn   = document.getElementById('dl-btn');
+  const label = document.getElementById('btn-label');
+  btn.disabled = true;
+  label.innerHTML = '<div class="spinner"></div>';
+
+  try {
+    const res = await fetch(`${API_BASE}/api/download`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: secretKey, url, quality, audio_only: audioOnly, dest })
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      showToast(data.error || '서버 오류', 'error');
+      return;
+    }
+
+    const jobId = data.job_id;
+    const destLabel = dest === 'komq' ? '/media/paradise/komq'
+                      : dest === 'milkoy' ? '/media/paradise/milkoy'
+                      : dest;
+    jobs[jobId] = {
+      id: jobId, url, quality: audioOnly ? 'MP3' : quality,
+      dest: destLabel,
+      status: 'queued', progress: 0, log: '대기 중...',
+      created_at: new Date().toISOString()
+    };
+
+    document.getElementById('url-input').value = '';
+    renderJobs();
+    showToast('다운로드 대기열에 추가됨', 'success');
+    startPolling();
+
+  } catch (e) {
+    showToast('서버에 연결할 수 없습니다.', 'error');
+  } finally {
+    btn.disabled = false;
+    label.textContent = 'DOWNLOAD';
+  }
+}
+
+document.getElementById('url-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') startDownload();
+});
+
+// ─── Polling ──────────────────────────────────────────────────────────────────
+function startPolling() {
+  if (pollTimer) return;
+  pollTimer = setInterval(pollActive, 1500);
+}
+
+function stopPolling() {
+  clearInterval(pollTimer);
+  pollTimer = null;
+}
+
+async function pollActive() {
+  const active = Object.values(jobs).filter(j => j.status === 'queued' || j.status === 'downloading');
+  if (active.length === 0) { stopPolling(); return; }
+
+  await Promise.all(active.map(async j => {
+    try {
+      const res  = await fetch(`${API_BASE}/api/status/${j.id}`);
+      const data = await res.json();
+      const prev = jobs[j.id]?.status;
+      jobs[j.id] = data;
+      if (prev !== 'done' && data.status === 'done') {
+        showToast('✅ 다운로드 완료!', 'success');
+      }
+      if (prev !== 'error' && data.status === 'error') {
+        showToast('❌ 다운로드 실패', 'error');
+      }
+    } catch {}
+  }));
+
+  renderJobs();
+}
+
+// ─── Render Jobs ──────────────────────────────────────────────────────────────
+function renderJobs() {
+  const list = document.getElementById('jobs-list');
+  const section = document.getElementById('jobs-section');
+  const empty = document.getElementById('empty-state');
+  const arr = Object.values(jobs).reverse();
+
+  if (arr.length === 0) {
+    section.style.display = 'none';
+    empty.style.display = 'block';
+    return;
+  }
+
+  section.style.display = 'block';
+  empty.style.display = 'none';
+
+  list.innerHTML = arr.map(j => {
+    const badgeClass = `badge-${j.status}`;
+    const badgeLabel = { queued: 'QUEUED', downloading: 'DOWNLOADING', done: 'DONE', error: 'ERROR' }[j.status] || j.status.toUpperCase();
+    const progress   = j.progress || 0;
+    const shortUrl   = j.url.length > 60 ? j.url.slice(0, 57) + '...' : j.url;
+    const meta       = j.created_at ? new Date(j.created_at).toLocaleTimeString('ko-KR') : '';
+
+    return `
+    <div class="job ${j.status}" data-id="${j.id}">
+      <div class="job-top">
+        <div class="job-status-badge ${badgeClass}">${badgeLabel}</div>
+      </div>
+      <div class="progress-track">
+        <div class="progress-bar" style="width:${progress}%"></div>
+      </div>
+      <div class="job-log">${escHtml(j.log || '')}</div>
+      <div class="job-meta">
+        <span>${j.quality || ''}</span>
+        ${j.dest ? `<span style="color:var(--accent);opacity:.7">${j.dest}</span>` : ''}
+        ${meta ? `<span>${meta}</span>` : ''}
+        ${progress > 0 && j.status === 'downloading' ? `<span>${progress.toFixed(1)}%</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─── Clear Done ───────────────────────────────────────────────────────────────
+async function clearDone() {
+  try {
+    await fetch(`${API_BASE}/api/clear`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: secretKey })
+    });
+    // 로컬에서도 제거
+    Object.keys(jobs).forEach(id => {
+      if (jobs[id].status === 'done' || jobs[id].status === 'error') delete jobs[id];
+    });
+    renderJobs();
+    showToast('완료된 항목을 지웠습니다.', 'info');
+  } catch {
+    showToast('서버 오류', 'error');
+  }
+}
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+let toastTimer = null;
+function showToast(msg, type = 'info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = ''; }, 3000);
+}
+
+// ─── Util ─────────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─── Paste from clipboard ────────────────────────────────────────────────────
+document.getElementById('url-input').addEventListener('focus', async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (text.startsWith('http') && !document.getElementById('url-input').value) {
+      document.getElementById('url-input').value = text;
+    }
+  } catch {}
+});
+</script>
+</body>
+</html>
