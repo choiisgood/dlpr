@@ -12,14 +12,13 @@
 
 ## 주요 기능
 
-- **링크 붙여넣기 → 즉시 다운로드** — YouTube, Instagram, TikTok, Twitter 등 yt-dlp 지원 사이트 전부 동작
+- **링크 붙여넣기 → 즉시 다운로드** — YouTube, Instagram, TikTok, Twitter, Chzzk 등 yt-dlp 지원 사이트 전부 동작
 - **화질 선택** — BEST / 1080p / 720p / 480p
-- **Audio Only** — MP3 추출 (최고 음질)
-- **저장 경로 선택** — 프리셋 경로 버튼 + 직접 입력 지원
+- **Audio Only** — MP3 추출
+- **저장 경로 선택** — 직접 입력 지원
 - **실시간 진행률** — 다운로드 퍼센트 & 로그 1.5초마다 자동 갱신
 - **시크릿 키 인증** — 본인만 사용 가능한 간단한 인증
 - **클립보드 자동 붙여넣기** — URL 입력창 클릭 시 클립보드 내용 자동 채움
-- **다크 UI** — 모바일 친화적 반응형 디자인
 
 ---
 
@@ -96,36 +95,6 @@ export YTDLP_SECRET="my_strong_password"
 
 ---
 
-## 포트 개방 (Oracle Cloud)
-
-Oracle Cloud는 방화벽이 두 겹이므로 둘 다 열어야 합니다.
-
-**1. 오라클 콘솔 — Security List**
-
-`Networking → VCN → Security Lists → Add Ingress Rule`
-
-| 항목 | 값 |
-|---|---|
-| Source CIDR | `0.0.0.0/0` |
-| Protocol | TCP |
-| Destination Port | `8080` |
-
-**2. 서버 내부 — firewalld**
-
-```bash
-sudo firewall-cmd --permanent --add-port=8080/tcp
-sudo firewall-cmd --reload
-```
-
-**3. iptables (선택)**
-
-```bash
-sudo iptables -I INPUT -p tcp --dport 8080 -j ACCEPT
-sudo apt install iptables-persistent -y
-sudo netfilter-persistent save
-```
-
----
 
 ## API
 
