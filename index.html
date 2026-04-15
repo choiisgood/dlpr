@@ -536,8 +536,8 @@
 
   <!-- Auth Gate -->
   <div id="auth-gate">
-    <h2>// 인증 필요</h2>
-    <p>서버에 접근하려면<br/>시크릿 키를 입력하세요.</p>
+    <h2>// Authentication Required</h2>
+    <p>Enter your secret key<br/>to access the server.</p>
     <div class="field">
       <label class="field-label">Secret Key</label>
       <input type="password" id="key-input" placeholder="enter secret key..." autocomplete="current-password"/>
@@ -546,7 +546,7 @@
       AUTHENTICATE
     </button>
     <p id="auth-error" style="color:var(--red);font-size:12px;font-family:var(--mono);display:none">
-      ❌ 잘못된 키입니다.
+      ❌ Invalid key.
     </p>
   </div>
 
@@ -564,23 +564,17 @@
           autocomplete="off" autocorrect="off" spellcheck="false"/>
       </div>
 
-      <div class="options-row" style="grid-template-columns: 1fr 1fr 1fr;">
+      <div class="options-row" style="grid-template-columns: 1fr 1fr; row-gap: 14px;">
         <!-- Destination -->
-        <div class="seg-group">
-          <label class="field-label">저장 경로</label>
-          <div class="seg-btns" id="dest-btns" style="margin-bottom:6px">
-            <button class="seg-btn active" data-val="komq" onclick="selectDest(this)">komq</button>
-            <button class="seg-btn" data-val="milkoy" onclick="selectDest(this)">milkoy</button>
-            <button class="seg-btn" data-val="custom" onclick="selectDest(this)">직접입력</button>
-          </div>
-          <input type="text" id="custom-dest" placeholder="/media/..." autocomplete="off" spellcheck="false"
-            style="display:none;font-size:12px;padding:8px 10px"
-            oninput="if(dest==='custom')dest=this.value.trim()"/>
+        <div class="seg-group" style="grid-column: span 2">
+          <label class="field-label">Save Path</label>
+          <input type="text" id="dest-input" placeholder="/media/..." autocomplete="off" spellcheck="false"
+            oninput="dest=this.value.trim()"/>
         </div>
 
         <!-- Quality -->
         <div class="seg-group">
-          <label class="field-label">화질</label>
+          <label class="field-label">Quality</label>
           <div class="seg-btns" id="quality-btns">
             <button class="seg-btn" data-val="best" onclick="selectQuality(this)">BEST</button>
             <button class="seg-btn" data-val="1080" onclick="selectQuality(this)">1080p</button>
@@ -591,7 +585,7 @@
 
         <!-- Audio Only -->
         <div class="seg-group">
-          <label class="field-label">모드</label>
+          <label class="field-label">Mode</label>
           <div class="toggle-row" id="audio-toggle" onclick="toggleAudio()">
             <div class="toggle"></div>
             <span class="toggle-text">Audio Only (MP3)</span>
@@ -615,7 +609,7 @@
 
     <div id="empty-state" class="empty">
       <div class="empty-icon">▽</div>
-      URL을 입력하고 다운로드를 시작하세요.
+      Paste a URL and hit Download.
     </div>
 
   </div><!-- /#app -->
@@ -635,7 +629,7 @@ const API_BASE = window.location.hostname === 'localhost' || window.location.hos
 let secretKey  = '';
 let quality    = '720';
 let audioOnly  = false;
-let dest       = 'komq';
+let dest       = '';
 let jobs       = {};
 let pollTimer  = null;
 
@@ -669,21 +663,6 @@ document.getElementById('key-input').addEventListener('keydown', e => {
 });
 
 // ─── Quality / Audio Toggle ───────────────────────────────────────────────────
-function selectDest(el) {
-  document.querySelectorAll('#dest-btns .seg-btn').forEach(b => b.classList.remove('active'));
-  el.classList.add('active');
-  const val = el.dataset.val;
-  const customInput = document.getElementById('custom-dest');
-  if (val === 'custom') {
-    customInput.style.display = 'block';
-    customInput.focus();
-    dest = customInput.value.trim() || '';
-  } else {
-    customInput.style.display = 'none';
-    dest = val;
-  }
-}
-
 function selectQuality(el) {
   document.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
@@ -694,7 +673,7 @@ function toggleAudio() {
   audioOnly = !audioOnly;
   const t = document.getElementById('audio-toggle');
   t.classList.toggle('active', audioOnly);
-  // 오디오 모드일 때 화질 선택 비활성화
+  // 오디오 Mode일 때 Quality 선택 비활성화
   document.querySelectorAll('.seg-btn').forEach(b => {
     b.style.opacity = audioOnly ? '.35' : '1';
     b.style.pointerEvents = audioOnly ? 'none' : '';
@@ -705,7 +684,11 @@ function toggleAudio() {
 async function startDownload() {
   const url = document.getElementById('url-input').value.trim();
   if (!url.startsWith('http')) {
-    showToast('올바른 URL을 입력하세요.', 'error');
+    showToast('Please enter a valid URL.', 'error');
+    return;
+  }
+  if (dest && !dest.startsWith('/')) {
+    showToast('Save path must be an absolute path starting with /.', 'error');
     return;
   }
 
@@ -723,28 +706,25 @@ async function startDownload() {
     const data = await res.json();
 
     if (!res.ok) {
-      showToast(data.error || '서버 오류', 'error');
+      showToast(data.error || 'Server error', 'error');
       return;
     }
 
     const jobId = data.job_id;
-    const destLabel = dest === 'komq' ? '/media/paradise/komq'
-                      : dest === 'milkoy' ? '/media/paradise/milkoy'
-                      : dest;
     jobs[jobId] = {
       id: jobId, url, quality: audioOnly ? 'MP3' : quality,
-      dest: destLabel,
+      dest: dest || 'default',
       status: 'queued', progress: 0, log: '대기 중...',
       created_at: new Date().toISOString()
     };
 
     document.getElementById('url-input').value = '';
     renderJobs();
-    showToast('다운로드 대기열에 추가됨', 'success');
+    showToast('Added to download queue', 'success');
     startPolling();
 
   } catch (e) {
-    showToast('서버에 연결할 수 없습니다.', 'error');
+    showToast('Cannot connect to server.', 'error');
   } finally {
     btn.disabled = false;
     label.textContent = 'DOWNLOAD';
@@ -777,10 +757,10 @@ async function pollActive() {
       const prev = jobs[j.id]?.status;
       jobs[j.id] = data;
       if (prev !== 'done' && data.status === 'done') {
-        showToast('✅ 다운로드 완료!', 'success');
+        showToast('✅ Download complete!', 'success');
       }
       if (prev !== 'error' && data.status === 'error') {
-        showToast('❌ 다운로드 실패', 'error');
+        showToast('❌ Download failed', 'error');
       }
     } catch {}
   }));
@@ -843,9 +823,9 @@ async function clearDone() {
       if (jobs[id].status === 'done' || jobs[id].status === 'error') delete jobs[id];
     });
     renderJobs();
-    showToast('완료된 항목을 지웠습니다.', 'info');
+    showToast('Cleared completed jobs.', 'info');
   } catch {
-    showToast('서버 오류', 'error');
+    showToast('Server error', 'error');
   }
 }
 
